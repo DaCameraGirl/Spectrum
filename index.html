@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>SPECTRUM — bring color back</title>
+<style>
+  :root { --ink:#e9e9f0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #14141a; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none; user-select: none;
+    touch-action: none;
+  }
+  #game { display: block; position: fixed; inset: 0; }
+
+  /* ---- Overlays (title + finale) ---- */
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 24px;
+    background: radial-gradient(120% 120% at 50% 40%, rgba(18,18,24,.80), rgba(8,8,12,.95));
+    transition: opacity .6s ease;
+    z-index: 10;
+  }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .title {
+    font-size: clamp(48px, 12vw, 132px);
+    font-weight: 800; letter-spacing: .12em;
+    line-height: 1;
+    background: linear-gradient(90deg,#ff5d5d,#ffa64d,#ffe24d,#5dff8f,#4dc3ff,#9a6dff,#ff6dd6);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 4px 30px rgba(120,120,255,.35));
+    animation: hue 14s linear infinite;
+  }
+  @keyframes hue { to { filter: drop-shadow(0 4px 30px rgba(120,120,255,.35)) hue-rotate(360deg); } }
+
+  .sub { margin-top: 18px; font-size: clamp(15px, 2.6vw, 21px); color: #c8c8d6; max-width: 30ch; line-height: 1.45; }
+  .hint { margin-top: 10px; font-size: clamp(12px, 2vw, 14px); color: #8a8a9c; max-width: 34ch; line-height: 1.5; }
+
+  .btn {
+    margin-top: 34px;
+    font: inherit; font-size: clamp(16px, 2.4vw, 19px); font-weight: 700; letter-spacing: .04em;
+    color: #1a1020;
+    padding: 14px 30px; border: 0; border-radius: 999px; cursor: pointer;
+    background: linear-gradient(90deg,#ffd24d,#5dff8f,#4dc3ff,#9a6dff);
+    background-size: 280% 100%;
+    box-shadow: 0 10px 40px rgba(120,160,255,.30);
+    transition: transform .12s ease, box-shadow .2s ease;
+    animation: slide 6s linear infinite;
+  }
+  @keyframes slide { to { background-position: 280% 0; } }
+  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 14px 50px rgba(120,160,255,.45); }
+  .btn:active { transform: translateY(0) scale(.99); }
+
+  .credit { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 12px; color: #6b6b7c; z-index: 10; }
+
+  /* tiny mute toggle, top-right */
+  #mute {
+    position: fixed; top: 12px; right: 14px; z-index: 12;
+    font: inherit; font-size: 18px; line-height: 1;
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06); color: #d6d6e2; cursor: pointer;
+    transition: background .2s ease;
+  }
+  #mute:hover { background: rgba(255,255,255,.14); }
+</style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <button id="mute" title="Mute / unmute (M)">♪</button>
+
+  <div id="title" class="overlay">
+    <div class="title">SPECTRUM</div>
+    <div class="sub">A world of gray is waiting for its color.</div>
+    <div class="hint">Move with your mouse, touch, or WASD / arrow keys. Glide over the dormant buds to make them bloom — and paint the whole world bright.</div>
+    <button id="startBtn" class="btn">Bring the light ▸</button>
+  </div>
+
+  <div id="finale" class="overlay hidden">
+    <div class="title">YOU COLORED IT ALL</div>
+    <div class="sub">Every shade belongs here. Happy Pride. 🏳️‍🌈</div>
+    <button id="againBtn" class="btn">Color it again</button>
+  </div>
+
+  <div class="credit">SPECTRUM · June Solstice Game Jam 2026</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------------------
+  // Setup: main canvas (what you see) + an offscreen "paint" canvas that holds
+  // every stroke of color you've laid down. Keeping paint on its own layer lets
+  // us (a) accumulate color permanently and (b) measure how much is filled.
+  // ---------------------------------------------------------------------------
+  const view = document.getElementById('game');
+  const ctx  = view.getContext('2d');
+  const paint = document.createElement('canvas');
+  const pctx  = paint.getContext('2d');
+
+  // A tiny canvas used only to measure coverage cheaply (we downscale the paint
+  // layer into it and count lit pixels — far faster than reading the full frame).
+  const probe = document.createElement('canvas');
+  const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+  const PW = 96; // probe width in px; height set from aspect on resize
+
+  let W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight;
+    for (const c of [view, paint]) {
+      c.width = Math.floor(W * DPR);
+      c.height = Math.floor(H * DPR);
+    }
+    view.style.width = paint.style.width = W + 'px';
+    view.style.height = paint.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    pctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    probe.width = PW;
+    probe.height = Math.max(1, Math.round(PW * H / W));
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------------------------------------------------------------------------
+  // Tunables
+  // ---------------------------------------------------------------------------
+  const TARGET_FILL = 0.60; // fraction of pixels lit that counts as a "full" world
+  const BRUSH = 46;         // trail radius
+  const SPEED = 430;        // player max speed (px/s)
+  const ACCEL = 9;          // how snappily the player reaches target velocity
+  const NUM_BUDS = 16;
+
+  const TAU = Math.PI * 2;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx*dx + dy*dy; };
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  let state = 'title';            // 'title' | 'play' | 'finale'
+  let player, buds, particles, motes, confetti;
+  let coverage = 0, progress = 0; // 0..1
+  let shake = 0, time = 0;
+  let finaleT = 0;                // ramps 0->1 during the ending sweep
+  let probeTimer = 0;
+
+  const pointer = { x: W/2, y: H/2, active: false };
+  const keys = new Set();
+
+  function reset() {
+    pctx.setTransform(1,0,0,1,0,0);
+    pctx.clearRect(0, 0, paint.width, paint.height);
+    pctx.setTransform(DPR,0,0,DPR,0,0);
+
+    player = { x: W/2, y: H/2, px: W/2, py: H/2, vx: 0, vy: 0, hue: rand(0,360) };
+    buds = [];
+    for (let i = 0; i < NUM_BUDS; i++) {
+      buds.push({
+        x: rand(W*0.08, W*0.92),
+        y: rand(H*0.14, H*0.9),
+        r: rand(13, 19),
+        hue: rand(0, 360),
+        bloomed: false,
+        t: rand(0, TAU) // pulse phase
+      });
+    }
+    particles = [];
+    confetti = [];
+    motes = [];
+    for (let i = 0; i < 46; i++) {
+      motes.push({ x: rand(0,W), y: rand(0,H), r: rand(0.6,2.0), s: rand(4,16), o: rand(0.04,0.16) });
+    }
+    coverage = progress = shake = finaleT = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Painting — lay luminous color on the paint layer using additive blending so
+  // overlapping strokes glow brighter, like light rather than ink.
+  // ---------------------------------------------------------------------------
+  function stroke(x, y, r, hue, alpha) {
+    const g = pctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `hsla(${hue},92%,62%,${alpha})`);
+    g.addColorStop(1, `hsla(${hue},92%,62%,0)`);
+    pctx.globalCompositeOperation = 'lighter';
+    pctx.fillStyle = g;
+    pctx.beginPath();
+    pctx.arc(x, y, r, 0, TAU);
+    pctx.fill();
+  }
+
+  // Paint a smooth line between two points so fast movement leaves no gaps.
+  function paintTrail(x0, y0, x1, y1, hue) {
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.max(1, Math.floor(d / (BRUSH * 0.35)));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      stroke(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, BRUSH, hue, 0.16);
+    }
+  }
+
+  function bloom(b) {
+    b.bloomed = true;
+    shake = Math.min(shake + 7, 16);
+    // A burst of petals in shifting hues — a big splash of color.
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * TAU + rand(-0.2, 0.2);
+      const rr = rand(60, 110);
+      stroke(b.x + Math.cos(a)*rr*0.45, b.y + Math.sin(a)*rr*0.45, rr, (b.hue + k*40) % 360, 0.5);
+    }
+    stroke(b.x, b.y, 120, b.hue, 0.55);
+    // Flying particles
+    for (let k = 0; k < 26; k++) {
+      const a = rand(0, TAU), sp = rand(40, 230);
+      particles.push({
+        x: b.x, y: b.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+        life: 1, max: rand(0.6, 1.3), r: rand(2, 5), hue: (b.hue + rand(-30,60)) % 360
+      });
+    }
+    note(b.hue);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Audio — a tiny Web Audio "score": each bloom plays a soft note from a major
+  // pentatonic scale, pitch rising with your progress so the world feels like it
+  // is lifting toward the finale. Built only after a user gesture (browser rule).
+  // ---------------------------------------------------------------------------
+  let audio = null, muted = false;
+  const SCALE = [0, 2, 4, 7, 9, 12, 14, 16]; // semitones, pentatonic-ish, gentle
+  function initAudio() {
+    if (audio) return;
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { audio = null; }
+  }
+  function note(hue) {
+    if (!audio || muted) return;
+    const idx = SCALE[Math.floor(clamp(progress,0,0.999) * SCALE.length)];
+    const base = 220 * Math.pow(2, idx / 12);
+    const freq = base * (1 + (hue/360) * 0.04); // tiny detune from the bud's color
+    const t = audio.currentTime;
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t); osc.stop(t + 1.15);
+  }
+  function chord() {
+    if (!audio || muted) return;
+    [0,4,7,12].forEach((semi, i) => {
+      const t = audio.currentTime + i*0.08;
+      const osc = audio.createOscillator(), gain = audio.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 330 * Math.pow(2, semi/12);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.16, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t); osc.stop(t + 2.3);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Update
+  // ---------------------------------------------------------------------------
+  function update(dt) {
+    time += dt;
+
+    if (state === 'play') {
+      // Steering: keyboard wins if pressed, otherwise glide toward the pointer.
+      let tx = 0, ty = 0, keyed = false;
+      if (keys.has('a') || keys.has('arrowleft'))  { tx -= 1; keyed = true; }
+      if (keys.has('d') || keys.has('arrowright')) { tx += 1; keyed = true; }
+      if (keys.has('w') || keys.has('arrowup'))    { ty -= 1; keyed = true; }
+      if (keys.has('s') || keys.has('arrowdown'))  { ty += 1; keyed = true; }
+
+      let desVx, desVy;
+      if (keyed) {
+        const m = Math.hypot(tx, ty) || 1;
+        desVx = tx/m * SPEED; desVy = ty/m * SPEED;
+      } else {
+        const dx = pointer.x - player.x, dy = pointer.y - player.y;
+        const d = Math.hypot(dx, dy);
+        const sp = Math.min(SPEED, d * 6);          // ease to a stop near the cursor
+        desVx = d > 1 ? dx/d * sp : 0;
+        desVy = d > 1 ? dy/d * sp : 0;
+      }
+      player.vx += (desVx - player.vx) * Math.min(1, ACCEL * dt);
+      player.vy += (desVy - player.vy) * Math.min(1, ACCEL * dt);
+
+      player.px = player.x; player.py = player.y;
+      player.x = clamp(player.x + player.vx * dt, 0, W);
+      player.y = clamp(player.y + player.vy * dt, 0, H);
+      player.hue = (player.hue + dt * 70) % 360; // rainbow over time
+
+      paintTrail(player.px, player.py, player.x, player.y, player.hue);
+
+      // Bloom buds the light touches
+      const reach = (BRUSH * 0.7);
+      for (const b of buds) {
+        if (!b.bloomed && dist2(player.x, player.y, b.x, b.y) < (reach + b.r)*(reach + b.r)) {
+          bloom(b);
+        }
+      }
+
+      // Measure coverage every ~8 frames
+      probeTimer += dt;
+      if (probeTimer > 0.12) {
+        probeTimer = 0;
+        probeCtx.clearRect(0, 0, probe.width, probe.height);
+        probeCtx.drawImage(paint, 0, 0, probe.width, probe.height);
+        const data = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+        let lit = 0;
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 18) lit++;
+        coverage = lit / (probe.width * probe.height);
+        progress = clamp(coverage / TARGET_FILL, 0, 1);
+        if (progress >= 1) startFinale();
+      }
+    }
+
+    if (state === 'finale') {
+      finaleT = Math.min(1, finaleT + dt * 0.5);
+      if (finaleT > 0.25 && finalOverlay.classList.contains('hidden')) {
+        finalOverlay.classList.remove('hidden');
+      }
+      // keep spawning a little confetti during the sweep
+      if (finaleT < 0.9 && Math.random() < 0.6) {
+        confetti.push({
+          x: rand(0, W), y: -20, vx: rand(-40, 40), vy: rand(60, 180),
+          r: rand(4, 9), hue: rand(0, 360), spin: rand(-6, 6), a: rand(0, TAU)
+        });
+      }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt / p.max;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.vy += 60 * dt; // slight gravity
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 0.98; p.vy *= 0.98;
+    }
+    // Confetti
+    for (let i = confetti.length - 1; i >= 0; i--) {
+      const c = confetti[i];
+      c.x += c.vx * dt; c.y += c.vy * dt; c.a += c.spin * dt;
+      c.vy += 40 * dt;
+      if (c.y > H + 30) confetti.splice(i, 1);
+    }
+    // Drifting motes
+    for (const m of motes) { m.y -= m.s * dt; if (m.y < -4) { m.y = H + 4; m.x = rand(0, W); } }
+
+    shake *= Math.pow(0.0025, dt); // fast, smooth decay
+  }
+
+  function startFinale() {
+    if (state === 'finale') return;
+    state = 'finale';
+    finaleT = 0;
+    shake = 12;
+    // pop any buds that are still dormant, as a final flourish
+    for (const b of buds) if (!b.bloomed) bloom(b);
+    chord();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+  function drawBackground() {
+    const g = ctx.createRadialGradient(W*0.5, H*0.42, 0, W*0.5, H*0.5, Math.max(W,H)*0.75);
+    g.addColorStop(0, '#26262e');
+    g.addColorStop(1, '#121218');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // dust motes
+    ctx.fillStyle = '#ffffff';
+    for (const m of motes) {
+      ctx.globalAlpha = m.o;
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBuds() {
+    for (const b of buds) {
+      if (b.bloomed) {
+        // a gentle persistent flower glow
+        const pulse = 0.6 + 0.4 * Math.sin(time*2 + b.t);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 26);
+        g.addColorStop(0, `hsla(${b.hue},95%,68%,${0.5*pulse})`);
+        g.addColorStop(1, `hsla(${b.hue},95%,68%,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 26, 0, TAU); ctx.fill();
+        ctx.restore();
+      } else {
+        // dormant gray orb, faintly breathing so the player notices it
+        const pulse = 0.5 + 0.5 * Math.sin(time*1.6 + b.t);
+        ctx.save();
+        ctx.strokeStyle = `rgba(190,190,205,${0.25 + 0.2*pulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + pulse*3, 0, TAU); ctx.stroke();
+        ctx.fillStyle = `rgba(150,150,165,${0.18 + 0.12*pulse})`;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r*0.5, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawPlayer() {
+    const r = 16 + Math.sin(time*5) * 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, r*3.4);
+    g.addColorStop(0, `hsla(${player.hue},95%,70%,0.95)`);
+    g.addColorStop(0.4, `hsla(${(player.hue+40)%360},95%,62%,0.45)`);
+    g.addColorStop(1, `hsla(${player.hue},95%,62%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(player.x, player.y, r*3.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(player.x, player.y, r*0.42, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of particles) {
+      ctx.globalAlpha = clamp(p.life, 0, 1);
+      ctx.fillStyle = `hsl(${p.hue},95%,65%)`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawConfetti() {
+    for (const c of confetti) {
+      ctx.save();
+      ctx.translate(c.x, c.y); ctx.rotate(c.a);
+      ctx.fillStyle = `hsl(${c.hue},90%,62%)`;
+      ctx.fillRect(-c.r/2, -c.r/2, c.r, c.r*1.6);
+      ctx.restore();
+    }
+  }
+
+  function drawFinaleSweep() {
+    // a rainbow wash that grows to fully saturate the world
+    const a = 0.55 * finaleT;
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    const hues = [0, 40, 60, 140, 200, 270, 320];
+    hues.forEach((h, i) => g.addColorStop(i/(hues.length-1), `hsla(${h},90%,60%,${a})`));
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
+  function drawMeter() {
+    const w = Math.min(W * 0.5, 360), h = 12, x = (W - w)/2, y = 22;
+    ctx.save();
+    // track
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(x, y, w, h, h/2); ctx.fill();
+    // rainbow fill
+    const fw = Math.max(h, w * progress);
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0,'#ff5d5d'); g.addColorStop(.2,'#ffa64d'); g.addColorStop(.4,'#ffe24d');
+    g.addColorStop(.6,'#5dff8f'); g.addColorStop(.8,'#4dc3ff'); g.addColorStop(1,'#9a6dff');
+    ctx.fillStyle = g;
+    roundRect(x, y, fw, h, h/2); ctx.fill();
+    // label
+    ctx.fillStyle = 'rgba(233,233,240,0.85)';
+    ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const bloomed = buds.filter(b => b.bloomed).length;
+    ctx.fillText(`${Math.round(progress*100)}% colored   ·   ${bloomed}/${buds.length} buds bloomed`, W/2, y + h + 20);
+    ctx.restore();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, h/2, w/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
+  function render() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (shake > 0.2) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+    drawBackground();
+    ctx.drawImage(paint, 0, 0, W, H);   // the accumulated color
+    drawBuds();
+    drawParticles();
+    if (state !== 'title') drawPlayer();
+    if (state === 'finale') { drawFinaleSweep(); drawConfetti(); }
+
+    ctx.restore();
+    if (state === 'play') drawMeter();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Loop
+  // ---------------------------------------------------------------------------
+  reset(); // build the world at load so the title screen animates and the loop never hits undefined arrays
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------------------------------------------------------------------------
+  // Input
+  // ---------------------------------------------------------------------------
+  view.addEventListener('pointermove', e => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true; });
+  view.addEventListener('pointerdown', e => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true; });
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (k === 'm') toggleMute();
+    if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  });
+  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+
+  // ---------------------------------------------------------------------------
+  // UI wiring
+  // ---------------------------------------------------------------------------
+  const titleOverlay = document.getElementById('title');
+  const finalOverlay = document.getElementById('finale');
+  const muteBtn = document.getElementById('mute');
+
+  function start() {
+    initAudio();
+    if (audio && audio.state === 'suspended') audio.resume();
+    reset();
+    state = 'play';
+    titleOverlay.classList.add('hidden');
+    finalOverlay.classList.add('hidden');
+  }
+  function toggleMute() {
+    muted = !muted;
+    muteBtn.textContent = muted ? '✕' : '♪';
+    muteBtn.style.color = muted ? '#7a7a8c' : '#d6d6e2';
+  }
+
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('againBtn').addEventListener('click', start);
+  muteBtn.addEventListener('click', toggleMute);
+
+})();
+</script>
+</body>
+</html>
