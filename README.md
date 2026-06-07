@@ -1,74 +1,113 @@
-# 🌈 SPECTRUM
+<h1 align="center">🌈✨ SPECTRUM ✨🌈</h1>
 
-**Bring color back to a world of gray.**
+<h2 align="center"><strong>BRING COLOR BACK TO A WORLD OF GRAY.</strong></h2>
 
-A calm, luminous browser game built for the **June Solstice Game Jam 2026** with a Pride-forward theme and a Juneteenth spirit of freedom, color, remembrance, and joy.
+<p align="center">
+  <strong>A luminous Pride + Juneteenth browser game for the June Solstice Game Jam 2026.</strong>
+</p>
+
+<p align="center">
+  <a href="https://dacameragirl.github.io/Spectrum/"><strong>🎮 PLAY SPECTRUM NOW</strong></a>
+</p>
+
+<p align="center">
+  <img alt="HTML5" src="https://img.shields.io/badge/HTML5-100%25-E34F26?style=for-the-badge&logo=html5&logoColor=white">
+  <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111111">
+  <img alt="Canvas" src="https://img.shields.io/badge/Canvas-HTML5-FF6F91?style=for-the-badge">
+  <img alt="Web Audio" src="https://img.shields.io/badge/Web%20Audio-Sound-8A2BE2?style=for-the-badge">
+  <img alt="GitHub Pages" src="https://img.shields.io/badge/GitHub%20Pages-Live-222222?style=for-the-badge&logo=githubpages&logoColor=white">
+  <img alt="No Dependencies" src="https://img.shields.io/badge/Dependencies-None-00C853?style=for-the-badge">
+</p>
+
+---
+
+## 🌞🌈 BIG VIBE
+
+**SPECTRUM** is a calm, glowing browser game about **color returning where it was muted**.
 
 You play a tiny mote of light moving through a sleeping gray world. Everywhere you glide, color wakes up. Dormant buds bloom. The air brightens. The meter fills. When enough color returns, the whole world opens into a rainbow finale. 🏳️‍🌈✨🌞
 
-## 🎮 Play
+> **Soft movement. Permanent color. Blooming light. A world waking back up.**
 
-Play it here:
+## 🎮 PLAY
 
-👉 **https://dacameragirl.github.io/Spectrum/**
+<h2 align="center"><a href="https://dacameragirl.github.io/Spectrum/"><strong>👉 PLAY LIVE ON GITHUB PAGES 👈</strong></a></h2>
 
-Or open `index.html` in any modern browser. No install, no build, no dependencies.
+You can also open `index.html` in any modern browser.
 
-## 🕹️ Controls
+**No install. No build. No dependencies. Just open and play.**
 
-- 🖱️ **Mouse / touch:** the light glides toward your pointer.
-- ⌨️ **WASD / arrow keys:** move by keyboard.
-- 🌱 **Bloom buds:** glide over the breathing gray buds.
-- 🌈 **Fill the color meter:** reach **100% colored** to trigger the finale.
-- 🎵 **♪ / M:** toggle sound.
+## 🕹️ CONTROLS
 
-## ✨ Theme
+| Action | Control |
+|---|---|
+| 🖱️ Move with pointer | Mouse / touch |
+| ⌨️ Move with keyboard | WASD / arrow keys |
+| 🌱 Bloom buds | Glide over gray buds |
+| 🌈 Trigger finale | Fill the color meter to **100%** |
+| 🎵 Toggle sound | **♪** or **M** |
 
-SPECTRUM is about color returning where it was muted.
+## ✨ THEME
 
-- 🌈 **Pride:** visibility, softness, glow, self-expression, and chosen color.
-- 🖤❤️💚💛 **Juneteenth:** liberation, memory, resilience, and the joy of becoming free.
-- 🌞 **June Solstice:** light at its longest, warmth spreading, a world waking up.
-- 🌸 **Blooming:** small acts of movement creating permanent change.
+<table>
+<tr>
+<td><strong>🌈 PRIDE</strong></td>
+<td>Visibility, softness, glow, self-expression, chosen color, and joy.</td>
+</tr>
+<tr>
+<td><strong>🖤❤️💚💛 JUNETEENTH</strong></td>
+<td>Liberation, memory, resilience, freedom, and becoming brighter after being muted.</td>
+</tr>
+<tr>
+<td><strong>🌞 JUNE SOLSTICE</strong></td>
+<td>Light at its longest, warmth spreading, a world waking up.</td>
+</tr>
+<tr>
+<td><strong>🌺 BLOOMING</strong></td>
+<td>Small acts of movement creating permanent change.</td>
+</tr>
+</table>
 
-The game is gentle on purpose: no combat, no score pressure, no punishment. Just movement, color, sound, and a world becoming brighter because you touched it.
+The game is gentle on purpose: **no combat, no punishment, no pressure.** Just movement, color, sound, and a world becoming brighter because you touched it.
 
-## 🌺 What Happens In Game
+## 🌺 WHAT HAPPENS IN GAME
 
-1. 🩶 The world starts gray and quiet.
-2. ✨ Your light leaves glowing rainbow trails.
-3. 🌱 Gray buds pulse and wait.
-4. 🌼 Touching a bud makes it bloom.
-5. 🎶 Each bloom plays a note.
-6. 🌈 The color meter climbs.
-7. 🎆 At 100%, the world erupts into a rainbow finale.
+1. 🩶 **The world starts gray and quiet.**
+2. ✨ **Your light leaves glowing rainbow trails.**
+3. 🌱 **Gray buds pulse and wait.**
+4. 🌼 **Touching a bud makes it bloom.**
+5. 🎶 **Each bloom plays a note.**
+6. 🌈 **The color meter climbs.**
+7. 🎆 **At 100%, the world erupts into a rainbow finale.**
 
-## 🧠 How It Works
+## 🧠 HOW IT WORKS
 
-- 🎨 A hidden `paint` canvas stores every stroke, so color stays permanent while the world redraws each frame.
-- 💡 Strokes use additive blending with `globalCompositeOperation = 'lighter'`, so color reads as light instead of ink.
-- 📊 Coverage is measured by shrinking the paint layer to a tiny thumbnail and counting lit pixels.
-- 🎵 A small Web Audio score plays pentatonic notes on each bloom, rising as the finale gets closer.
-- 🧩 Everything lives in one self-contained `index.html` file.
+- 🎨 **Persistent paint layer:** a hidden `paint` canvas stores every stroke.
+- 💡 **Light blending:** strokes use `globalCompositeOperation = 'lighter'` so color reads like glow.
+- 📊 **Fast coverage tracking:** the paint layer is downscaled to a tiny thumbnail and counted.
+- 🎵 **Generative bloom sound:** Web Audio plays pentatonic notes that rise toward the finale.
+- 🧩 **Single-file build:** the entire game lives inside one `index.html`.
 
-## 🛠️ Tech
+## 🛠️ LANGUAGE / TECH BAR
 
-- Vanilla JavaScript
-- HTML5 Canvas
-- Web Audio
-- No dependencies
-- No build step
-- GitHub Pages deployment
+<p align="center">
+  <strong>HTML5</strong> ▰▰▰▰▰▰▰▰▰▰ 100%<br>
+  <strong>Vanilla JavaScript</strong> ▰▰▰▰▰▰▰▰▱▱ Canvas + game logic<br>
+  <strong>CSS</strong> ▰▰▰▰▰▱▱▱▱▱ Inline visual styling<br>
+  <strong>Web Audio</strong> ▰▰▰▰▱▱▱▱▱▱ Bloom notes + sound toggle
+</p>
 
-## 📁 Files
+## 📁 FILES
 
-- `index.html`: the whole game.
-- `README.md`: this page.
-- `LICENSE`: All Rights Reserved license.
+| File | Purpose |
+|---|---|
+| `index.html` | **The whole game** |
+| `README.md` | Project page |
+| `LICENSE` | All Rights Reserved license |
 
-## 🔒 License
+## 🔒 LICENSE
 
-Copyright (c) 2026 Angela Hudson. All Rights Reserved.
+**Copyright (c) 2026 Angela Hudson. All Rights Reserved.**
 
 Viewing this public repository does **not** grant permission to use, copy, modify, publish, distribute, sell, sublicense, or create derivative works from this software without prior written permission.
 
@@ -76,4 +115,9 @@ See [LICENSE](LICENSE) for the full terms.
 
 ---
 
-Made by **Angela Hudson** · June Solstice Game Jam 2026 · Pride + Juneteenth color bloom edition 🌈🌞🌺
+<h2 align="center">Made by <strong>Angela Hudson</strong></h2>
+
+<p align="center">
+  <strong>June Solstice Game Jam 2026 · Pride + Juneteenth Color Bloom Edition</strong><br>
+  🌈 🌞 🌺 🖤 ❤️ 💚 💛 ✨
+</p>
